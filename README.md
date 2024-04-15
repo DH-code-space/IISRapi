@@ -23,7 +23,7 @@ pun=IISRpunctuation("best-model-pun.pt",your_GPU_num)
 ner=IISRner("best-model-ner.pt",your_GPU_num)
 ```
 ### To use CPU:
-Change the second argument to -1 when you initialize the class
+Change your_GPU_num to -1
 
 ### Use the function:
 ```python
