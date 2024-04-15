@@ -11,7 +11,7 @@ from IISRapi import IISRner, IISRpunctuation
 ### To use GPU:
 install pytorch with cuda using pip:  
 ```
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 using conda:  
 ```
