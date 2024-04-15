@@ -25,7 +25,7 @@ ner=IISRner("best-model-ner.pt",your_GPU_num)
 ### To use CPU:
 Change your_GPU_num to -1
 
-### Use the function:
+### Use the following functions to get the result you want:
 ```python
 pun(your_str)
 ner(your_str)
