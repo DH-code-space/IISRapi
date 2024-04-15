@@ -1,12 +1,9 @@
 # Introduction
-This module helps you adding punctuation and named entity recogniiton(ner) to Ming-shilu, it also shows the position where ner or punctuation is used.
+This package helps you adding punctuation and named entity recogniiton(ner) to Ming-shilu, it also shows the position where ner or punctuation is used.
 # Installation
 ```
-pip install -U IISRapi
+pip install IISRapi
 ```
-# Download model
-[Google Drive](https://drive.google.com/file/d/1XaLt9skosuU-3VOqMCFyub6drf1SiQyz/view?usp=sharing)  
-Put both models in the same folder as your code
 # Usage
 ```python
 from IISRapi import IISRner, IISRpunctuation
