@@ -5,18 +5,11 @@ This package helps you adding punctuation and named entity recogniiton(ner) to M
 pip install IISRapi
 ```
 # Usage
+Create a folder, put both models and your code in this folder
 ```python
 from IISRapi import IISRner, IISRpunctuation
 ```
 ### To use GPU:
-install pytorch with cuda using pip:  
-```
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-using conda:  
-```
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
-```
 You can check the No. of the GPU you want to use by going to task manager
 ```python
 pun=IISRpunctuation("best-model-pun.pt",your_GPU_num)
@@ -45,7 +38,8 @@ for element in result:
 print the result you want like the example shown below
 ```python
 print(ner(your_str))
-print(pun.pos)
+print(pun.pos) #punctuation position
+print(ner.pos) #ner position
 ```
 # Notice
 You can combine 2 functions and print the result. But make sure you do punctuation first then ner, otherwise the result will be wrong.
