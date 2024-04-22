@@ -27,7 +27,7 @@ print(pun_res(your_str))
 ```
 #### method 2:
 ```python
-a=Data(ori_txt=your_str,ret_txt="")
+a=Data(ori_txt=your_str)
 print(ner_res(a))
 print(pun_res(a))
 ```
