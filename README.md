@@ -8,41 +8,29 @@ pip install IISRapi
 Create a folder, put both models and your code in this folder
 ### Import:
 ```python
-from IISRapi import IISRner, IISRpunctuation
+from IISRapi.model import ner, pun, data
 ```
 ### To use GPU:
 You can check the No. of the GPU you want to use by going to task manager
 ```python
-pun=IISRpunctuation("best-model-pun.pt",your_GPU_num)
-ner=IISRner("best-model-ner.pt",your_GPU_num)
+ner_res=ner.IISRner(dev=your_GPU_num)
+pun_res=pun.IISRpunctuation(dev=your_GPU_num)
 ```
 ### To use CPU:
 Change your_GPU_num to -1
 
-### Use the following functions to get the result you want:
-```python
-pun(your_str) #string
-ner(your_str) #string
-pun.pos #punctuation position
-ner.pos #ner position
-```
-
-### print result:
-
+### Getting result:
 #### method 1:
-Save the result in Data
 ```python
-from IISRapi import Data
-result=Data(ori_txt=your_str,ret_txt=pun_re(your_str),ner_tags=ner.pos,punct=pun.pos)
-for element in result:
-   print(element)
+print(ner_res(your_str))
+print(pun_res(your_str))
 ```
 #### method 2:
-print the result you want like the example shown below
 ```python
-print(ner(your_str))
-print(pun.pos)
-print(ner.pos)
+a=Data(ori_txt=your_str,ret_txt="")
+print(ner_res(a))
+print(pun_res(a))
 ```
+Both will print out result in the format Data(Input_string, Result_string, Ner_position, Punctuation_position)
 # Notice
-You can combine 2 functions and print the result. But make sure you do punctuation first then ner, otherwise the result will be wrong.
+If you use both functions at the same time, either ner_res(pun_res(your_str)) or pun_res(ner_res(your_str)), the result will only show the result of the function which is done later.
