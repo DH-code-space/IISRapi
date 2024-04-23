@@ -1,5 +1,5 @@
 # Introduction
-This package helps you adding punctuation and named entity recognition(ner) to Ming-Shilu, it also shows the position where ner or punctuation is used.
+This package helps you add punctuation and named entity recognition(ner) to Ming-Shilu, it also shows the position where ner or punctuation is used.
 # Installation
 ```
 pip install IISRapi
@@ -27,7 +27,7 @@ print(pun_res(your_str))
 ```
 #### method 2:
 ```python
-a=Data(ori_txt=your_str)
+a=data.Data(your_str)
 print(ner_res(a))
 print(pun_res(a))
 ```
