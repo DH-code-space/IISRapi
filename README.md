@@ -5,7 +5,6 @@ This package helps you add punctuation and named entity recognition(ner) to Ming
 pip install IISRapi
 ```
 # Usage
-Create a folder, put both models and your code in this folder
 ### Import:
 ```python
 from IISRapi.model import ner, pun, data
