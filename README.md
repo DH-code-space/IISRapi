@@ -32,4 +32,5 @@ print(pun_res(a))
 ```
 Both will print out result in the format Data(Input_string, Result_string, Ner_position, Punctuation_position)
 # Notice
-If you use both functions at the same time, either ner_res(pun_res(your_str)) or pun_res(ner_res(your_str)), the result will only show the result of the function which is done later.
+1. If you want to use GPU to run modules，uninstall torch then visit https://pytorch.org/get-started/locally/  
+2. If you use both functions at the same time, either ner_res(pun_res(your_str)) or pun_res(ner_res(your_str)), the result will only show the result of the function which is done later.
