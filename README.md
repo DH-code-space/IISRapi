@@ -3,8 +3,8 @@ This package helps you add punctuation and named entity recognition(ner) to Ming
 # Requirement
 ```
 1. python >=3.8
-2. flair==0.13.1
-3. pip>=20.0.2
+2. pip>=20.0.2
+3. conda>=3.9.0(optional)
 ```
 # Installation
 ```
