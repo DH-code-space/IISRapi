@@ -1,14 +1,22 @@
 import os
-import sys
 import torch
 import re
 import flair
 import subprocess
+import pickle
+import io
+import warnings
+import json
+from tqdm import tqdm
+from torch.utils.data import DataLoader
 from flair.models import SequenceTagger
 from flair.data import Sentence
-from .data import struct
+from data import struct
 from typing import List, Tuple
-
+from transformers import AutoTokenizer
+from dataset import myDataset
+from utils import create_mini_batch,get_recall_precision
+from sklearn.metrics import f1_score
 class IISRner:
     """
     This class provides methods for Named Entity Recognition (NER) using the NER model.
@@ -77,7 +85,7 @@ class IISRner:
             path=os.path.join(os.path.dirname(IISRner.__file__),"best-model-ner.pt")
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
-            model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRner-1.0-py3-none-any.whl"
+            model_url="https://github.com/DH-code-space/IISRapi/releases/tag/IISRmodel/IISRner-1.0-py3-none-any.whl"
             subprocess.call(["pip", "install", model_url])
             import IISRner
             path=os.path.join(os.path.dirname(IISRner.__file__),"best-model-ner.pt")
@@ -281,7 +289,7 @@ class IISRpunctuation:
             path=os.path.join(os.path.dirname(IISRpunctuation.__file__),"best-model-pun.pt")
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
-            model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRpunctuation-1.0-py3-none-any.whl"
+            model_url="https://github.com/DH-code-space/IISRapi/releases/tag/IISRmodel/IISRpunctuation-1.0-py3-none-any.whl"
             subprocess.call(["pip", "install", model_url])
             import IISRpunctuation
             path=os.path.join(os.path.dirname(IISRpunctuation.__file__),"best-model-pun.pt")
@@ -384,3 +392,306 @@ class IISRpunctuation:
             tokenized_sentences.append(''.join(with_punctuation))
             tokenized_string=''.join(tokenized_sentences)
             return tokenized_string,pos
+        
+class eamac:
+    """
+    This class provides methods for paraphrasing using the model.
+    
+    Methods:
+        __init__(self, dev: int) -> None:
+            Initializes the eamac object with the optional device ID.
+
+        get_path(self) -> str:
+            Returns the path to the NER model files.If the model can't be found, 
+            then this function will download it automatically.
+
+        load_model(self) -> None:
+            Loads the model onto the specified device (CPU or GPU).
+
+        __call__(self, texts: Union[str, data.struct]) -> data.truct:
+            Processes the input text for NER, handling both strings and TextStruct objects.
+            
+        predict_NotSliced(self, model, dataloader, device) -> list:
+            Return a list of prediction result.
+
+
+    """
+    def __init__(self, gpu="cpu", batch_size=4, pretrained_model_name="hsc748NLP/GujiBERT_fan") -> None:      
+        """
+        Initialize the eamac class with the specified GPU, batch size, and pretrained model name.
+        
+        Args:
+            gpu (str): The device to use, either 'cpu' or 'cuda'.
+            batch_size (int): The batch size for data loading.
+            pretrained_model_name (str): The name of the pretrained model to use for tokenization.
+        """
+        warnings.filterwarnings("ignore")
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+        self.batch=batch_size
+        self.model=self.load_model()
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+        self.device = torch.device(gpu if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(self.device)
+        print("device:", self.device)
+    
+    def get_path(self) -> str:
+        """
+        Retrieves the path to the model file, handling potential download.
+
+        This method attempts to locate the model file (model.pkl) within the
+        package directory of the `eamacmodel` module. If the module is not found or the
+        model file is missing, it automatically downloads the required model package from a
+        specified URL using pip.
+
+        Returns:
+            str: The absolute path to the model file.
+
+        Raises:
+            ModuleNotFoundError: If the model path not found.
+        """
+        try:
+            import eamacmodel
+            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pkl")
+        except ModuleNotFoundError:
+            print("Model file not found. Downloading model...")
+            model_url="https://github.com/DH-code-space/IISRapi/releases/tag/IISRmodel/IISRmodel/eamacmodel-1.0-py3-none-any.whl"
+            subprocess.call(["pip", "install", model_url])
+            import eamacmodel
+            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pkl")
+        return path
+    
+    def load_model(self) -> None:
+        """
+        Load the model from the specified path.
+        
+        Returns:
+            The loaded model.
+        """
+        with open(self.get_path(), "rb") as file:
+            if torch.cuda.is_available()==False:
+                return CPU_Unpickler(file).load()
+            else:
+                return pickle.load(file)
+    
+    def split_sentence(self,sentence, max_length=254) -> list:
+        """
+        Split a sentence into smaller parts with a specified maximum length.
+        
+        Args:
+            sentence (str): The sentence to split.
+            max_length (int): The maximum length of each split part.
+        
+        Returns:
+            list: A list of split sentences.
+        """
+        sentences = []
+        while len(sentence) > max_length:
+            split_point = sentence.rfind(' ', 0, max_length)
+            if split_point == -1:
+                split_point = max_length
+            sentences.append(sentence[:split_point].strip())
+            sentence = sentence[split_point:].strip()
+        sentences.append(sentence)
+        return sentences    
+    
+    def to_json(self,s1,s2) -> list:
+        """
+        Convert two sentences into a list of JSON strings with split parts.
+        
+        Args:
+            s1 (str): The first sentence.
+            s2 (str): The second sentence.
+        
+        Returns:
+            list: A list of JSON strings.
+        """
+        paired_list=[]
+        group_num=1
+        paired_list.append({"label": 0, "s1": s1, "s2": s2, "id": "1-"+str(group_num)})
+        group_num = group_num + 1
+        if len(paired_list)==1:
+            paired_list[0]["id"]="1"
+        json_list = [json.dumps(item, ensure_ascii=False) for item in paired_list]
+        return json_list
+    
+    def __call__(self,s1,s2) -> bool:
+        """
+        Call method to tokenize sentences and make predictions.
+        
+        Args:
+            s1 (str): The first sentence.
+            s2 (str): The second sentence.
+        
+        Returns:
+            bool: The prediction results.
+        """
+        self.input=self.to_json(s1,s2)
+        self.testset = myDataset(self.tokenizer,self.input)
+        self.testloader = DataLoader(self.testset, shuffle=False, batch_size=self.batch, collate_fn=create_mini_batch)
+        return self.predict_NotSliced(model=self.model, dataloader=self.testloader, device=self.device)
+   
+    def predict_NotSliced(self, model, dataloader, device) -> list:
+        """
+        Predicts labels for the test set without slicing.
+
+        Args:
+            model (nn.Module): The model to use for predictions.
+            dataloader (DataLoader): DataLoader for the test data.
+            device (torch.device): Device to run the predictions on.
+
+        Returns:
+            bool: If 2 articles are paraphrased.
+        """
+        model.eval()
+        pred_list = []
+        groundtruth = []
+        bar = tqdm(enumerate(dataloader), total=len(dataloader))
+
+        with torch.no_grad():
+            for step, data in bar:
+                data = [t.to(device) for t in data if t is not None]
+                ids, seg, mask = data[:3]
+                outputs = model(ids, seg, mask)
+
+                p = torch.nn.functional.softmax(outputs, dim=1)
+                posibility, pred = torch.max(p, 1)
+                pred = pred.tolist()
+                posibility = posibility.tolist()
+                pred_list += pred
+        #with open('./test.jsonl', "r", encoding="utf-8") as f1:
+        #    json_list = list(f1)
+        #for json_str in json_list:
+        #    result = json.loads(json_str)
+        #    groundtruth.append(result["label"])
+        #f1 = f1_score(groundtruth, pred_list)
+        #recall, precision = get_recall_precision(groundtruth, pred_list)
+        #print(f1)
+        #print(recall)
+        #print(precision)
+        return pred
+    def predict_Sliced(self, model, dataloader, device, dataset):
+        """
+        Makes predictions on a dataset using the provided model.
+
+        Sets the model to evaluation mode and processes data from the dataloader 
+        to generate predictions.
+
+        Args:
+            model: The model to be used for prediction.
+            dataloader: DataLoader object that provides batches of data.
+            device: Device to run the model on (e.g., 'cpu' or 'cuda').
+            dataset: Dataset object containing the id_list and label_list.
+            args: Arguments containing paths for input and output folders and filenames.
+
+        Returns:
+            None. Outputs predictions to a file and prints evaluation metrics.
+        """
+        model.eval()
+        pred_list = []
+        bar = tqdm(enumerate(dataloader), total=len(dataloader))
+
+        with torch.no_grad():
+            for step, data in bar:
+                data = [t.to(device) for t in data if t is not None]
+                ids, seg, mask = data[:3]
+                outputs = model(ids, seg, mask)
+
+                p = torch.nn.functional.softmax(outputs, dim=1)
+                _, pred = torch.max(p, 1)
+                pred = pred.tolist()
+                pred_list += pred
+
+        id_list = dataset.id_list
+        label_list = dataset.label_list
+        groundtruth = []
+        model_pred = []
+        tempans = 0
+        boolcheck = False
+        for i in range(len(id_list)):
+            if "-" not in id_list[i]:
+                groundtruth.append(label_list[i])
+            else:
+                idx, seg = id_list[i].split("-")
+                if seg == "1":
+                    groundtruth.append(label_list[i])
+        count = 1
+        for i in range(len(id_list)):
+            if "-" not in id_list[i]:
+                if boolcheck == True:
+                    if tempans == 1:
+                        model_pred.append(1)
+                    else:
+                        model_pred.append(0)
+                    count += 1
+                    tempans = 0
+                    boolcheck = False
+                model_pred.append(pred_list[i])
+                count += 1
+            else:
+                boolcheck = True
+                idx, seg = id_list[i].split("-")
+                if idx != str(count):
+                    if tempans == 1:
+                        model_pred.append(1)
+                    else:
+                        model_pred.append(0)
+                    tempans = 0
+                    count += 1
+                    if pred_list[i] == 1:
+                        tempans = 1
+                if pred_list[i] == 1:
+                    tempans = 1
+            if i == len(id_list) - 1 and len(model_pred) == len(groundtruth) - 1:
+                model_pred.append(tempans)
+        result_list=[]
+        index=0
+        for json_str in self.input:
+            result = json.loads(json_str)
+            result["label"] = pred_list[index]
+            index=index+1
+            result_list.append(result)
+            
+        outlist = {1: {"s1": set(), "s2": set()}, 0: {"s1": set(), "s2": set()}}
+
+        for entry in result_list:
+            label = entry["label"]
+            outlist[label]["s1"].add(entry["s1"])
+            outlist[label]["s2"].add(entry["s2"])
+
+        final_result = {
+            True: {
+                "s1": " ".join(outlist[1]["s1"]),
+                "s2": " ".join(outlist[1]["s2"])
+            },
+            False: {
+                "s1": " ".join(outlist[0]["s1"]),
+                "s2": " ".join(outlist[0]["s2"])
+            }
+        }
+        return final_result,len(groundtruth),len(model_pred),count
+    
+class CPU_Unpickler(pickle.Unpickler):
+    """
+    A custom unpickler that ensures tensors are loaded onto the CPU.
+
+    Inherits from `pickle.Unpickler` and overrides the `find_class` method to
+    replace the `torch.storage._load_from_bytes` function with a version that
+    loads tensors onto the CPU using `torch.load(io.BytesIO(b), map_location='cpu')`.
+    """
+    def find_class(self, module, name):
+        """
+        Overrides the default `find_class` method to handle torch.storage._load_from_bytes.
+
+        Args:
+            module: The module name of the class being sought.
+            name: The name of the class being sought.
+
+        Returns:
+            A callable that loads tensors onto the CPU, or None if not found.
+        """
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        else:
+            return super().find_class(module, name)
