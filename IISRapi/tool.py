@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from flair.models import SequenceTagger
 from flair.data import Sentence
 from data import struct
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from transformers import AutoTokenizer
 from dataset import myDataset
 from utils import create_mini_batch,get_recall_precision
@@ -58,10 +58,10 @@ class IISRner:
         self.model_path=self.get_path()
         if(dev>=0 and torch.cuda.is_available()):
             flair.device = torch.device('cuda:' + str(dev))
-            print(f"Running model with GPU No.{dev}")
+            print(f"device: {dev}")
         else:
             flair.device = torch.device('cpu')
-            print("Running model with CPU")
+            print("device: CPU")
        
         self.model = self.load_model()
         
@@ -85,7 +85,7 @@ class IISRner:
             path=os.path.join(os.path.dirname(IISRner.__file__),"best-model-ner.pt")
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
-            model_url="https://github.com/DH-code-space/IISRapi/releases/tag/IISRmodel/IISRner-1.0-py3-none-any.whl"
+            model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRner-1.0-py3-none-any.whl"
             subprocess.call(["pip", "install", model_url])
             import IISRner
             path=os.path.join(os.path.dirname(IISRner.__file__),"best-model-ner.pt")
@@ -262,10 +262,10 @@ class IISRpunctuation:
         self.model_path=self.get_path()
         if(dev>=0 and torch.cuda.is_available()):
             flair.device = torch.device('cuda:' + str(dev))
-            print(f"Running model with GPU No.{dev}")
+            print(f"device: {dev}")
         else:
             flair.device = torch.device('cpu')
-            print("Running model with CPU")
+            print("device: CPU")
             
         self.model = self.load_model()
         
@@ -289,7 +289,7 @@ class IISRpunctuation:
             path=os.path.join(os.path.dirname(IISRpunctuation.__file__),"best-model-pun.pt")
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
-            model_url="https://github.com/DH-code-space/IISRapi/releases/tag/IISRmodel/IISRpunctuation-1.0-py3-none-any.whl"
+            model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRpunctuation-1.0-py3-none-any.whl"
             subprocess.call(["pip", "install", model_url])
             import IISRpunctuation
             path=os.path.join(os.path.dirname(IISRpunctuation.__file__),"best-model-pun.pt")
@@ -411,9 +411,8 @@ class eamac:
         __call__(self, texts: Union[str, data.struct]) -> data.truct:
             Processes the input text for NER, handling both strings and TextStruct objects.
             
-        predict_NotSliced(self, model, dataloader, device) -> list:
+        predict(self, model, dataloader, device) -> list:
             Return a list of prediction result.
-
 
     """
     def __init__(self, gpu="cpu", batch_size=4, pretrained_model_name="hsc748NLP/GujiBERT_fan") -> None:      
@@ -456,46 +455,28 @@ class eamac:
             path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pkl")
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
-            model_url="https://github.com/DH-code-space/IISRapi/releases/tag/IISRmodel/IISRmodel/eamacmodel-1.0-py3-none-any.whl"
+            model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/eamacmodel-1.0-py3-none-any.whl"
             subprocess.call(["pip", "install", model_url])
             import eamacmodel
             path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pkl")
         return path
-    
-    def load_model(self) -> None:
-        """
-        Load the model from the specified path.
         
+    def load_model(self):
+        """
+        Loads a model from a file.
+
+        This function checks if CUDA is available and uses the appropriate unpickler
+        based on the device.
+
         Returns:
-            The loaded model.
+            The loaded model object.
         """
         with open(self.get_path(), "rb") as file:
             if torch.cuda.is_available()==False:
                 return CPU_Unpickler(file).load()
             else:
                 return pickle.load(file)
-    
-    def split_sentence(self,sentence, max_length=254) -> list:
-        """
-        Split a sentence into smaller parts with a specified maximum length.
-        
-        Args:
-            sentence (str): The sentence to split.
-            max_length (int): The maximum length of each split part.
-        
-        Returns:
-            list: A list of split sentences.
-        """
-        sentences = []
-        while len(sentence) > max_length:
-            split_point = sentence.rfind(' ', 0, max_length)
-            if split_point == -1:
-                split_point = max_length
-            sentences.append(sentence[:split_point].strip())
-            sentence = sentence[split_point:].strip()
-        sentences.append(sentence)
-        return sentences    
-    
+            
     def to_json(self,s1,s2) -> list:
         """
         Convert two sentences into a list of JSON strings with split parts.
@@ -508,15 +489,12 @@ class eamac:
             list: A list of JSON strings.
         """
         paired_list=[]
-        group_num=1
-        paired_list.append({"label": 0, "s1": s1, "s2": s2, "id": "1-"+str(group_num)})
-        group_num = group_num + 1
-        if len(paired_list)==1:
-            paired_list[0]["id"]="1"
+        for _s1,_s2 in zip(s1,s2):
+            paired_list.append({"s1": _s1, "s2": _s2})
         json_list = [json.dumps(item, ensure_ascii=False) for item in paired_list]
         return json_list
     
-    def __call__(self,s1,s2) -> bool:
+    def __call__(self,s1,s2) -> list:
         """
         Call method to tokenize sentences and make predictions.
         
@@ -525,14 +503,14 @@ class eamac:
             s2 (str): The second sentence.
         
         Returns:
-            bool: The prediction results.
+            list: list of prediction result.
         """
         self.input=self.to_json(s1,s2)
         self.testset = myDataset(self.tokenizer,self.input)
         self.testloader = DataLoader(self.testset, shuffle=False, batch_size=self.batch, collate_fn=create_mini_batch)
-        return self.predict_NotSliced(model=self.model, dataloader=self.testloader, device=self.device)
+        return self.predict(model=self.model, dataloader=self.testloader, device=self.device)
    
-    def predict_NotSliced(self, model, dataloader, device) -> list:
+    def predict(self, model, dataloader, device) -> list:
         """
         Predicts labels for the test set without slicing.
 
@@ -542,7 +520,7 @@ class eamac:
             device (torch.device): Device to run the predictions on.
 
         Returns:
-            bool: If 2 articles are paraphrased.
+            list: list of prediction result.
         """
         model.eval()
         pred_list = []
@@ -560,117 +538,7 @@ class eamac:
                 pred = pred.tolist()
                 posibility = posibility.tolist()
                 pred_list += pred
-        #with open('./test.jsonl', "r", encoding="utf-8") as f1:
-        #    json_list = list(f1)
-        #for json_str in json_list:
-        #    result = json.loads(json_str)
-        #    groundtruth.append(result["label"])
-        #f1 = f1_score(groundtruth, pred_list)
-        #recall, precision = get_recall_precision(groundtruth, pred_list)
-        #print(f1)
-        #print(recall)
-        #print(precision)
-        return pred
-    def predict_Sliced(self, model, dataloader, device, dataset):
-        """
-        Makes predictions on a dataset using the provided model.
-
-        Sets the model to evaluation mode and processes data from the dataloader 
-        to generate predictions.
-
-        Args:
-            model: The model to be used for prediction.
-            dataloader: DataLoader object that provides batches of data.
-            device: Device to run the model on (e.g., 'cpu' or 'cuda').
-            dataset: Dataset object containing the id_list and label_list.
-            args: Arguments containing paths for input and output folders and filenames.
-
-        Returns:
-            None. Outputs predictions to a file and prints evaluation metrics.
-        """
-        model.eval()
-        pred_list = []
-        bar = tqdm(enumerate(dataloader), total=len(dataloader))
-
-        with torch.no_grad():
-            for step, data in bar:
-                data = [t.to(device) for t in data if t is not None]
-                ids, seg, mask = data[:3]
-                outputs = model(ids, seg, mask)
-
-                p = torch.nn.functional.softmax(outputs, dim=1)
-                _, pred = torch.max(p, 1)
-                pred = pred.tolist()
-                pred_list += pred
-
-        id_list = dataset.id_list
-        label_list = dataset.label_list
-        groundtruth = []
-        model_pred = []
-        tempans = 0
-        boolcheck = False
-        for i in range(len(id_list)):
-            if "-" not in id_list[i]:
-                groundtruth.append(label_list[i])
-            else:
-                idx, seg = id_list[i].split("-")
-                if seg == "1":
-                    groundtruth.append(label_list[i])
-        count = 1
-        for i in range(len(id_list)):
-            if "-" not in id_list[i]:
-                if boolcheck == True:
-                    if tempans == 1:
-                        model_pred.append(1)
-                    else:
-                        model_pred.append(0)
-                    count += 1
-                    tempans = 0
-                    boolcheck = False
-                model_pred.append(pred_list[i])
-                count += 1
-            else:
-                boolcheck = True
-                idx, seg = id_list[i].split("-")
-                if idx != str(count):
-                    if tempans == 1:
-                        model_pred.append(1)
-                    else:
-                        model_pred.append(0)
-                    tempans = 0
-                    count += 1
-                    if pred_list[i] == 1:
-                        tempans = 1
-                if pred_list[i] == 1:
-                    tempans = 1
-            if i == len(id_list) - 1 and len(model_pred) == len(groundtruth) - 1:
-                model_pred.append(tempans)
-        result_list=[]
-        index=0
-        for json_str in self.input:
-            result = json.loads(json_str)
-            result["label"] = pred_list[index]
-            index=index+1
-            result_list.append(result)
-            
-        outlist = {1: {"s1": set(), "s2": set()}, 0: {"s1": set(), "s2": set()}}
-
-        for entry in result_list:
-            label = entry["label"]
-            outlist[label]["s1"].add(entry["s1"])
-            outlist[label]["s2"].add(entry["s2"])
-
-        final_result = {
-            True: {
-                "s1": " ".join(outlist[1]["s1"]),
-                "s2": " ".join(outlist[1]["s2"])
-            },
-            False: {
-                "s1": " ".join(outlist[0]["s1"]),
-                "s2": " ".join(outlist[0]["s2"])
-            }
-        }
-        return final_result,len(groundtruth),len(model_pred),count
+        return pred_list
     
 class CPU_Unpickler(pickle.Unpickler):
     """
