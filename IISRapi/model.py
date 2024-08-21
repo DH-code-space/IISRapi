@@ -1,6 +1,6 @@
 from torch import nn
 from transformers import AutoModel
-from utils import MaxPooling
+from .utils import MaxPooling
 
     
 class MyGujiBert(nn.Module):
@@ -19,20 +19,19 @@ class MyGujiBert(nn.Module):
         forward(ids, seg, mask): Defines the forward pass of the model.
     """
 
-    def __init__(self, args):
+    def __init__(self, pretrained_model_name,dropout):
         """Initializes MyGujiBert with the specified arguments.
 
         Args:
-            args: Arguments containing the pretrained model name and 
-                  dropout probability.
+            pretrained_model_name: Name for the pretrained model
+            dropout: Dropout probability.
         """
         super(MyGujiBert, self).__init__()
 
-        self.mymodel = AutoModel.from_pretrained(args.pretrained_model_name)
-        self.drop = nn.Dropout(p=args.dropout)
+        self.mymodel = AutoModel.from_pretrained(pretrained_model_name)
+        self.drop = nn.Dropout(p=dropout)
         self.pooler = MaxPooling()
         self.fc = nn.Linear(self.mymodel.config.hidden_size, 2)
-
     def forward(self, ids, seg, mask):
         """Defines the forward pass of the model.
 

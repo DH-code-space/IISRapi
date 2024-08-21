@@ -8,15 +8,15 @@ import io
 import warnings
 import json
 from tqdm import tqdm
+from .model import MyGujiBert
 from torch.utils.data import DataLoader
 from flair.models import SequenceTagger
 from flair.data import Sentence
-from data import struct
+from .data import struct
 from typing import List, Tuple, Union
 from transformers import AutoTokenizer
-from dataset import myDataset
-from utils import create_mini_batch,get_recall_precision
-from sklearn.metrics import f1_score
+from .dataset import myDataset
+from .utils import create_mini_batch
 class IISRner:
     """
     This class provides methods for Named Entity Recognition (NER) using the NER model.
@@ -452,31 +452,28 @@ class eamac:
         """
         try:
             import eamacmodel
-            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pkl")
+            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pt")
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
             model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/eamacmodel-1.0-py3-none-any.whl"
             subprocess.call(["pip", "install", model_url])
             import eamacmodel
-            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pkl")
+            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pt")
         return path
         
-    def load_model(self):
+    def load_model(self) -> None:
         """
-        Loads a model from a file.
-
-        This function checks if CUDA is available and uses the appropriate unpickler
-        based on the device.
-
+        Loads a model from get_path().
+        Args:
+            model: Model.
+            weights: Model weights.
         Returns:
             The loaded model object.
-        """
-        with open(self.get_path(), "rb") as file:
-            if torch.cuda.is_available()==False:
-                return CPU_Unpickler(file).load()
-            else:
-                return pickle.load(file)
-            
+        """    
+        model=MyGujiBert(pretrained_model_name="hsc748NLP/GujiBERT_fan",dropout=0.3)
+        weights = torch.load(self.get_path())
+        model.load_state_dict(weights)
+        return model
     def to_json(self,s1,s2) -> list:
         """
         Convert two sentences into a list of JSON strings with split parts.
@@ -539,27 +536,3 @@ class eamac:
                 posibility = posibility.tolist()
                 pred_list += pred
         return pred_list
-    
-class CPU_Unpickler(pickle.Unpickler):
-    """
-    A custom unpickler that ensures tensors are loaded onto the CPU.
-
-    Inherits from `pickle.Unpickler` and overrides the `find_class` method to
-    replace the `torch.storage._load_from_bytes` function with a version that
-    loads tensors onto the CPU using `torch.load(io.BytesIO(b), map_location='cpu')`.
-    """
-    def find_class(self, module, name):
-        """
-        Overrides the default `find_class` method to handle torch.storage._load_from_bytes.
-
-        Args:
-            module: The module name of the class being sought.
-            name: The name of the class being sought.
-
-        Returns:
-            A callable that loads tensors onto the CPU, or None if not found.
-        """
-        if module == 'torch.storage' and name == '_load_from_bytes':
-            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
-        else:
-            return super().find_class(module, name)
