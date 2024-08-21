@@ -62,35 +62,3 @@ class MaxPooling(nn.Module):
         max_embeddings, _ = torch.max(embeddings, dim=1)
 
         return max_embeddings
-    
-def get_recall_precision(label, pred):
-    """Calculates recall and precision from true labels and predictions.
-
-    Args:
-        label (list of int): List of true labels.
-        pred (list of int): List of predicted labels.
-
-    Returns:
-        tuple: A tuple containing recall and precision values.
-    """
-    error_0 = 0
-    error_1 = 0
-    yes_0 = 0
-    yes_1 = 0
-
-    for l, p in zip(label, pred):
-        if l != p:
-            if l == 0:
-                error_0 += 1
-            elif l == 1:
-                error_1 += 1
-        elif l == p:
-            if l == 0:
-                yes_0 += 1
-            elif l == 1:
-                yes_1 += 1
-
-    recall = yes_1 / (yes_1 + error_1)
-    precision = yes_1 / (yes_1 + error_0)
-
-    return recall, precision
