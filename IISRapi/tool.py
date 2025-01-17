@@ -1,14 +1,22 @@
 import os
-import sys
 import torch
 import re
 import flair
 import subprocess
+import pickle
+import io, sys
+import warnings
+import json
+from tqdm import tqdm
+from .model import MyGujiBert
+from torch.utils.data import DataLoader
 from flair.models import SequenceTagger
 from flair.data import Sentence
 from .data import struct
-from typing import List, Tuple
-
+from typing import List, Tuple, Union
+from transformers import AutoTokenizer
+from .dataset import myDataset
+from .utils import create_mini_batch
 class IISRner:
     """
     This class provides methods for Named Entity Recognition (NER) using the NER model.
@@ -50,10 +58,10 @@ class IISRner:
         self.model_path=self.get_path()
         if(dev>=0 and torch.cuda.is_available()):
             flair.device = torch.device('cuda:' + str(dev))
-            print(f"Running model with GPU No.{dev}")
+            print(f"device: {dev}")
         else:
             flair.device = torch.device('cpu')
-            print("Running model with CPU")
+            print("device: CPU")
        
         self.model = self.load_model()
         
@@ -78,7 +86,7 @@ class IISRner:
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
             model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRner-1.0-py3-none-any.whl"
-            subprocess.call(["pip", "install", model_url])
+            subprocess.call([sys.executable, "-m", "pip", "install", model_url])
             import IISRner
             path=os.path.join(os.path.dirname(IISRner.__file__),"best-model-ner.pt")
         return path
@@ -254,10 +262,10 @@ class IISRpunctuation:
         self.model_path=self.get_path()
         if(dev>=0 and torch.cuda.is_available()):
             flair.device = torch.device('cuda:' + str(dev))
-            print(f"Running model with GPU No.{dev}")
+            print(f"device: {dev}")
         else:
             flair.device = torch.device('cpu')
-            print("Running model with CPU")
+            print("device: CPU")
             
         self.model = self.load_model()
         
@@ -282,7 +290,7 @@ class IISRpunctuation:
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
             model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRpunctuation-1.0-py3-none-any.whl"
-            subprocess.call(["pip", "install", model_url])
+            subprocess.call([sys.executable, "-m", "pip", "install", model_url])
             import IISRpunctuation
             path=os.path.join(os.path.dirname(IISRpunctuation.__file__),"best-model-pun.pt")
         return path
@@ -384,3 +392,147 @@ class IISRpunctuation:
             tokenized_sentences.append(''.join(with_punctuation))
             tokenized_string=''.join(tokenized_sentences)
             return tokenized_string,pos
+        
+class eamac:
+    """
+    This class provides methods for paraphrasing using the model.
+    
+    Methods:
+        __init__(self, dev: int) -> None:
+            Initializes the eamac object with the optional device ID.
+
+        get_path(self) -> str:
+            Returns the path to the NER model files.If the model can't be found, 
+            then this function will download it automatically.
+
+        load_model(self) -> None:
+            Loads the model onto the specified device (CPU or GPU).
+
+        __call__(self, texts: Union[str, data.struct]) -> data.truct:
+            Processes the input text for NER, handling both strings and TextStruct objects.
+            
+        predict(self, model, dataloader, device) -> list:
+            Return a list of prediction result.
+
+    """
+    def __init__(self, gpu="cpu", batch_size=4, pretrained_model_name="hsc748NLP/GujiBERT_fan") -> None:      
+        """
+        Initialize the eamac class with the specified GPU, batch size, and pretrained model name.
+        
+        Args:
+            gpu (str): The device to use, either 'cpu' or 'cuda'.
+            batch_size (int): The batch size for data loading.
+            pretrained_model_name (str): The name of the pretrained model to use for tokenization.
+        """
+        warnings.filterwarnings("ignore")
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name)
+        self.batch=batch_size
+        self.model=self.load_model()
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+        self.device = torch.device(gpu if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(self.device)
+        print("device:", self.device)
+    
+    def get_path(self) -> str:
+        """
+        Retrieves the path to the model file, handling potential download.
+
+        This method attempts to locate the model file (model.pkl) within the
+        package directory of the `eamacmodel` module. If the module is not found or the
+        model file is missing, it automatically downloads the required model package from a
+        specified URL using pip.
+
+        Returns:
+            str: The absolute path to the model file.
+
+        Raises:
+            ModuleNotFoundError: If the model path not found.
+        """
+        try:
+            import eamacmodel
+            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pt")
+        except ModuleNotFoundError:
+            print("Model file not found. Downloading model...")
+            model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/eamacmodel-1.0-py3-none-any.whl"
+            subprocess.call([sys.executable, "-m", "pip", "install", model_url])
+            import eamacmodel
+            path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pt")
+        return path
+        
+    def load_model(self) -> None:
+        """
+        Loads a model from get_path().
+        Args:
+            model: Model.
+            weights: Model weights.
+        Returns:
+            The loaded model object.
+        """    
+        model=MyGujiBert(pretrained_model_name="hsc748NLP/GujiBERT_fan",dropout=0.3)
+        weights = torch.load(self.get_path())
+        model.load_state_dict(weights)
+        return model
+    def to_json(self,s1,s2) -> list:
+        """
+        Convert two sentences into a list of JSON strings with split parts.
+        
+        Args:
+            s1 (str): The first sentence.
+            s2 (str): The second sentence.
+        
+        Returns:
+            list: A list of JSON strings.
+        """
+        paired_list=[]
+        for _s1,_s2 in zip(s1,s2):
+            paired_list.append({"s1": _s1, "s2": _s2})
+        json_list = [json.dumps(item, ensure_ascii=False) for item in paired_list]
+        return json_list
+    
+    def __call__(self,s1,s2) -> list:
+        """
+        Call method to tokenize sentences and make predictions.
+        
+        Args:
+            s1 (str): The first sentence.
+            s2 (str): The second sentence.
+        
+        Returns:
+            list: list of prediction result.
+        """
+        self.input=self.to_json(s1,s2)
+        self.testset = myDataset(self.tokenizer,self.input)
+        self.testloader = DataLoader(self.testset, shuffle=False, batch_size=self.batch, collate_fn=create_mini_batch)
+        return self.predict(model=self.model, dataloader=self.testloader, device=self.device)
+   
+    def predict(self, model, dataloader, device) -> list:
+        """
+        Predicts labels for the test set without slicing.
+
+        Args:
+            model (nn.Module): The model to use for predictions.
+            dataloader (DataLoader): DataLoader for the test data.
+            device (torch.device): Device to run the predictions on.
+
+        Returns:
+            list: list of prediction result.
+        """
+        model.eval()
+        pred_list = []
+        groundtruth = []
+        bar = tqdm(enumerate(dataloader), total=len(dataloader))
+
+        with torch.no_grad():
+            for step, data in bar:
+                data = [t.to(device) for t in data if t is not None]
+                ids, seg, mask = data[:3]
+                outputs = model(ids, seg, mask)
+
+                p = torch.nn.functional.softmax(outputs, dim=1)
+                posibility, pred = torch.max(p, 1)
+                pred = pred.tolist()
+                posibility = posibility.tolist()
+                pred_list += pred
+        return pred_list
