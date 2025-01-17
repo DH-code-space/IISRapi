@@ -7,13 +7,14 @@ def readmd():
     
 setup(
     name='IISRapi',
-    version='2.1.2',
+    version='2.1.4',
     packages=find_packages(),
     license='MIT',
     long_description=readmd(),
     long_description_content_type='text/markdown',
-    requires=[
+    install_requires=[
         'transformers',
         'flair',
+        'torch'
     ]
 )
