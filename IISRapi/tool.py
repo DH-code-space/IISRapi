@@ -4,7 +4,7 @@ import re
 import flair
 import subprocess
 import pickle
-import io
+import io, sys
 import warnings
 import json
 from tqdm import tqdm
@@ -86,7 +86,7 @@ class IISRner:
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
             model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRner-1.0-py3-none-any.whl"
-            subprocess.call(["pip", "install", model_url])
+            subprocess.call([sys.executable, "-m", "pip", "install", model_url])
             import IISRner
             path=os.path.join(os.path.dirname(IISRner.__file__),"best-model-ner.pt")
         return path
@@ -290,7 +290,7 @@ class IISRpunctuation:
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
             model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/IISRpunctuation-1.0-py3-none-any.whl"
-            subprocess.call(["pip", "install", model_url])
+            subprocess.call([sys.executable, "-m", "pip", "install", model_url])
             import IISRpunctuation
             path=os.path.join(os.path.dirname(IISRpunctuation.__file__),"best-model-pun.pt")
         return path
@@ -456,7 +456,7 @@ class eamac:
         except ModuleNotFoundError:
             print("Model file not found. Downloading model...")
             model_url="https://github.com/DH-code-space/punctuation-and-named-entity-recognition-for-Ming-Shilu/releases/download/IISRmodel/eamacmodel-1.0-py3-none-any.whl"
-            subprocess.call(["pip", "install", model_url])
+            subprocess.call([sys.executable, "-m", "pip", "install", model_url])
             import eamacmodel
             path=os.path.join(os.path.dirname(eamacmodel.__file__),"model.pt")
         return path
