@@ -502,6 +502,16 @@ class eamac:
         Returns:
             list: list of prediction result.
         """
+        if isinstance(s1, str):
+            s1 = [s1]  # Convert single string to a list of one string
+        elif not isinstance(s1, list) or not all(isinstance(i, str) for i in s1):
+            raise ValueError("s1 must be a string or a list of strings.")
+        if isinstance(s2, str):
+            s2 = [s2]  # Convert single string to a list of one string
+        elif not isinstance(s2, list) or not all(isinstance(i, str) for i in s2):
+            raise ValueError("s2 must be a string or a list of strings.")
+        assert len(s1) == len(s2), "s1 and s2 must have the same number of strings."
+
         self.input=self.to_json(s1,s2)
         self.testset = myDataset(self.tokenizer,self.input)
         self.testloader = DataLoader(self.testset, shuffle=False, batch_size=self.batch, collate_fn=create_mini_batch)
